@@ -184,6 +184,8 @@ class Device:
         care to only read it once.
         """
         self.map()
+        # delay may stablize the script
+        time.sleep(1)
         if o_verbose >= 2:
             print("  0x%x[%03x] R4" % (self.base_address, off), end="")
         off += self.mmap_offset
@@ -200,6 +202,8 @@ class Device:
 
     def write32(self, off, value, check=None, mask=None):
         assert self.map_is_write, "0x%x: device should have been write-enabled" % self.base_address
+	    # delay may stablize the script
+        time.sleep(1)
         if mask is not None:
             # Write value under mask. The mask specifies the bits to act on.
             # Other bits retain their previous value.
@@ -218,12 +222,12 @@ class Device:
             return readback == value
 
     def set32(self, off, value, check=None):
-        self.write32(off, self.read32(off) | value, check=False)
+        self.write32(off, self.read32(off) | value, check=True)
         if self.do_check(check):
             return (self.read32(off) & value) == value
 
     def clr32(self, off, value, check=None):
-        self.write32(off, self.read32(off) & ~value, check=False)
+        self.write32(off, self.read32(off) & ~value, check=True)
         if self.do_check(check):
             return (self.read32(off) & value) == 0
 
@@ -365,12 +369,12 @@ class Device:
     def unlock(self):
         self.write_enable()
         if not self.is_unlocked():
-            self.write32(0xFB0, 0xC5ACCE55, check=False)
+            self.write32(0xFB0, 0xC5ACCE55, check=True)
             self.we_unlocked = True
 
     def lock(self):
         if self.is_unlocked():
-            self.write32(0xFB0, 0x00000000, check=False)
+            self.write32(0xFB0, 0x00000000, check=True)
 
 
 class ROMTableEntry:
@@ -423,7 +427,8 @@ class CSROM:
         self.page_size = os.sysconf("SC_PAGE_SIZE")
         try:
             # This may fail because not present or access-restricted.
-            self.fd = open("/dev/mem", "r+b")
+            #self.fd = open("/dev/mem", "r+b")
+            self.fd = os.fdopen(os.open("/dev/mem", os.O_RDWR | os.O_SYNC))
         except:
             try:
                 self.fd = open("/dev/csmem", "r+b")
@@ -1153,7 +1158,7 @@ class CSROM:
                 ctrl = d.read32(0x000)
                 print("  %s" % ["disabled","enabled"][bit(ctrl,0)])
                 print("  frequency: %uHz" % d.read32(0x020))
-                test_time = 0.01
+                test_time = 1
                 count = d.read64counter(0x00C,0x008)
                 time.sleep(test_time)
                 count2 = d.read64counter(0x00C,0x008)
@@ -1218,10 +1223,10 @@ def topology_detection(atb_devices, topo):
                     # Some ETMv4 implementations have the integration reg
                     # at 0xEFC rather than 0xEF8.
                     # We set both, just in case. It should be harmless.                
-                    d.write32(0xEFC, flag*mask, check=False)
+                    d.write32(0xEFC, flag*mask, check=True)
         else:
             reg = 0xEF8
-        d.write32(reg, flag*mask, check=False)
+        d.write32(reg, flag*mask, check=True)
     def set_ATREADYS(d, n, flag):
         if d.is_funnel():
             enable_funnel_input(d, n)
@@ -1231,7 +1236,7 @@ def topology_detection(atb_devices, topo):
         else:
             reg = 0xEF0
             mask = 0x01
-        d.write32(reg, flag*mask, check=False)
+        d.write32(reg, flag*mask, check=True)
     def get_ATVALIDS(d, n):
         if d.is_funnel():
             enable_funnel_input(d, n)
@@ -1243,11 +1248,11 @@ def topology_detection(atb_devices, topo):
         d.unlock()
         d.set32(0xF00, 0x00000001, check=True)
         def clear_integration_regs(d):
-            d.write32(0xEF0, 0, check=False)
-            d.write32(0xEF8, 0, check=False)
-            d.write32(0xEFC, 0, check=False)
+            d.write32(0xEF0, 0, check=True)
+            d.write32(0xEF8, 0, check=True)
+            d.write32(0xEFC, 0, check=True)
             if d.is_coresight_device_type(2,3):
-                d.write32(0xEDC, 0, check=False)
+                d.write32(0xEDC, 0, check=True)
         if d.is_funnel():
             for i in range(0, d.atb_in_ports()):
                 enable_funnel_input(d, i)
